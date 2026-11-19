@@ -31,6 +31,16 @@
     mode: "0440"
     validate: "visudo -cf %s"
 
+# Ubuntu 24.04: sshd запускается через ssh.socket, и /run/sshd может отсутствовать,
+# тогда validate (sshd -t) падает с "Missing privilege separation directory".
+- name: Ensure sshd privilege separation directory exists
+  ansible.builtin.file:
+    path: /run/sshd
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: Harden SSH only after key installation
   ansible.builtin.copy:
     content: |
