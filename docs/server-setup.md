@@ -124,3 +124,47 @@ Docker Engine 29.9.2 установлен из официального репо
 | Сеть | `app_backend` (bridge), СУБД доступна приложению по имени `db` |
 | Именованный том | `app_db_data` → `/var/lib/postgresql/data` |
 | Обратный прокси | в HTTPS-блоке `/etc/nginx/sites-available/devops-site` расположение `location /app/` с `proxy_pass http://127.0.0.1:5000/` и заголовками `Host`, `X-Real-IP`, `X-Forwarded-For`, `X-Forwarded-Proto`; копия конфигурации до изменения `devops-site.bak-pr6` |
+
+## 10. Ansible
+
+С ПР № 11 VM настраивается не вручную, а плейбуком Ansible. Перед первым запуском VM откатывается к снимку `01-clean-install`, поэтому настройки из разделов 3, 5, 8 и 9 (NAT-проброс 2222, HTTPS, Compose-проект) на ней больше не действуют. Нужное конечное состояние описано в ролях.
+
+| Параметр | Значение |
+|---|---|
+| Расположение проекта | каталог `ansible/` этого репозитория; команды запускаются из него (там же лежит `ansible.cfg`) |
+| Управляющий узел | хостовый Mac (Apple Silicon), ansible-core 2.21, коллекции из `ansible/requirements.yml` (ansible.posix 1.6.2, community.docker 4.5.0, community.general 9.5.0), sshpass для первичного запуска |
+| Управляемый узел | `devops-vm`, Ubuntu Server 24.04 **arm64 (aarch64)**, Host-only `192.168.56.101` (`enp0s9`, закреплён в `/etc/netplan/60-hostonly.yaml`), SSH на порту 22 |
+| Inventory | `inventory/bootstrap.ini` (`student`, пароль, только первый запуск); `inventory/prod.ini` (`devops`, ключ `~/.ssh/devops_vm`, по умолчанию в `ansible.cfg`) |
+| Учётные записи | `student` — первичный доступ, после bootstrap вход по паролю отключён; `devops` — вход по ключу, группы `sudo` и `docker`, `NOPASSWD:ALL` в `/etc/sudoers.d/devops` |
+| Роль `base` | проверка ОС (Ubuntu 24.04 aarch64), базовые пакеты, `python3-debian`, `python3-requests`, репозиторий download.docker.com (deb822, arm64), Docker Engine 29.10.0
+1.24.0 |
+| Роль `ssh` | пользователь `devops` и ключ, sudoers с `visudo -cf`, `/etc/ssh/sshd_config.d/00-ansible-hardening.conf` с `sshd -t` (пароли и root запрещены, `AllowUsers student devops`), UFW: deny incoming, allow 22/tcp и 80/tcp |
+| Роль `nginx` | Nginx 29.10.0
+(Ubuntu), сайт `/etc/nginx/sites-available/devops-ci-app` (порт 80, `proxy_pass http://127.0.0.1:5000`), default site отключён; handlers `nginx -t` → reload |
+| Роль `app` | образ из GHCR и контейнер `devops-ci-app` с `restart_policy: unless-stopped` |
+| Образ | `ghcr.io/vleypi/devops-ci-app` (мультиархитектурный linux/amd64 + linux/arm64) |
+| Версия (полный SHA) | `1e3f7fc942f1f94687374a4c7034a25dd8392b7d`, переменная `app_tag` в `group_vars/all.yml`; `latest` не используется |
+| Порт контейнера | `127.0.0.1:5000` → `5000`, снаружи доступен только через Nginx на 80 |
+| Health endpoint | `GET /health` → `{"status":"ok"}` (`http://127.0.0.1:5000/health` на VM, `http://192.168.56.101/health` снаружи) |
+
+Первичный запуск (чистая VM, пароль student):
+
+    cd ansible
+    ansible-galaxy collection install -r requirements.yml
+    ansible-playbook -i inventory/bootstrap.ini site.yml --ask-pass --ask-become-pass
+
+Повторный и все последующие запуски (неинтерактивно, ожидается `changed=0`):
+
+    ansible-playbook site.yml
+
+Read-only аудит (SSH без паролей, контейнер запущен, /health отвечает):
+
+    ansible-playbook verify.yml
+
+Особенности чистого снимка, найденные при первом запуске:
+
+- после восстановления снимка часы VM отстают, и `apt` отклоняет Release-файлы как «not valid yet»; время синхронизируется командой `ansible -i inventory/bootstrap.ini vm -b -m shell -a "date -u -s '<UTC>' && timedatectl set-ntp true" --ask-pass --ask-become-pass`;
+- сразу после этого запускается `unattended-upgrades` и занимает блокировку dpkg, поэтому перед bootstrap нужно дождаться её освобождения;
+- в Ubuntu 24.04 sshd активируется через `ssh.socket`, и `/run/sshd` может отсутствовать, поэтому роль `ssh` создаёт этот каталог до проверки `sshd -t`.
+
+Пароли, закрытый ключ и токены в репозитории не хранятся.
