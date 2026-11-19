@@ -1,0 +1,6 @@
+---
+app_image: "ghcr.io/vleypi/devops-ci-app"
+app_tag: "1e3f7fc942f1f94687374a4c7034a25dd8392b7d"
+app_container_name: "devops-ci-app"
+app_host_port: 5000
+app_internal_port: 5000
