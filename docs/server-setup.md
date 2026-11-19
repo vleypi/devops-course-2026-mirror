@@ -136,11 +136,9 @@ Docker Engine 29.9.2 установлен из официального репо
 | Управляемый узел | `devops-vm`, Ubuntu Server 24.04 **arm64 (aarch64)**, Host-only `192.168.56.101` (`enp0s9`, закреплён в `/etc/netplan/60-hostonly.yaml`), SSH на порту 22 |
 | Inventory | `inventory/bootstrap.ini` (`student`, пароль, только первый запуск); `inventory/prod.ini` (`devops`, ключ `~/.ssh/devops_vm`, по умолчанию в `ansible.cfg`) |
 | Учётные записи | `student` — первичный доступ, после bootstrap вход по паролю отключён; `devops` — вход по ключу, группы `sudo` и `docker`, `NOPASSWD:ALL` в `/etc/sudoers.d/devops` |
-| Роль `base` | проверка ОС (Ubuntu 24.04 aarch64), базовые пакеты, `python3-debian`, `python3-requests`, репозиторий download.docker.com (deb822, arm64), Docker Engine 29.10.0
-1.24.0 |
-| Роль `ssh` | пользователь `devops` и ключ, sudoers с `visudo -cf`, `/etc/ssh/sshd_config.d/00-ansible-hardening.conf` с `sshd -t` (пароли и root запрещены, `AllowUsers student devops`), UFW: deny incoming, allow 22/tcp и 80/tcp |
-| Роль `nginx` | Nginx 29.10.0
-(Ubuntu), сайт `/etc/nginx/sites-available/devops-ci-app` (порт 80, `proxy_pass http://127.0.0.1:5000`), default site отключён; handlers `nginx -t` → reload |
+| Роль `base` | проверка ОС (Ubuntu 24.04 aarch64), базовые пакеты, `python3-debian`, `python3-requests`, репозиторий download.docker.com (deb822, arm64), Docker Engine 29.10.0 |
+| Роль `ssh` | пользователь `devops` и ключ, sudoers с `visudo -cf`, `/run/sshd` и `/etc/ssh/sshd_config.d/00-ansible-hardening.conf` с `sshd -t` (пароли и root запрещены, `AllowUsers student devops`), UFW: deny incoming, allow 22/tcp и 80/tcp |
+| Роль `nginx` | Nginx 1.24.0, сайт `/etc/nginx/sites-available/devops-ci-app` (порт 80, `proxy_pass http://127.0.0.1:5000`), default site отключён; handlers `nginx -t` → reload |
 | Роль `app` | образ из GHCR и контейнер `devops-ci-app` с `restart_policy: unless-stopped` |
 | Образ | `ghcr.io/vleypi/devops-ci-app` (мультиархитектурный linux/amd64 + linux/arm64) |
 | Версия (полный SHA) | `1e3f7fc942f1f94687374a4c7034a25dd8392b7d`, переменная `app_tag` в `group_vars/all.yml`; `latest` не используется |
